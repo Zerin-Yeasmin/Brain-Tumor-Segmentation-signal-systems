@@ -1,0 +1,479 @@
+Code:
+classdef EEE_4602_Project < matlab.apps.AppBase
+% Properties that correspond to app components
+properties (Access = public)
+UIFigure matlab.ui.Figure
+FileMenu matlab.ui.container.Menu
+OpenMenu matlab.ui.container.Menu
+RunMenu matlab.ui.container.Menu
+ToolsMenu matlab.ui.container.Menu
+ExportMenu matlab.ui.container.Menu
+ReportMenu matlab.ui.container.Menu
+ImageMenu matlab.ui.container.Menu
+AboutMenu matlab.ui.container.Menu
+AppMenu matlab.ui.container.Menu
+DevelopersMenu matlab.ui.container.Menu
+TabGroup matlab.ui.container.TabGroup
+OriginalTab matlab.ui.container.Tab
+UIAxes_Original matlab.ui.control.UIAxes
+ThresholdingTab matlab.ui.container.Tab
+UIAxes_Thresholding matlab.ui.control.UIAxes
+ThresholdSliderLabel matlab.ui.control.Label
+ThresholdSlider matlab.ui.control.Slider
+Threshold matlab.ui.control.NumericEditField
+ApplyThresholdSwitch matlab.ui.control.Switch
+EdgeTab matlab.ui.container.Tab
+UIAxes_Edge matlab.ui.control.UIAxes
+ApplyEdgeSwitch matlab.ui.control.Switch
+ClusteringTab matlab.ui.container.Tab
+UIAxes_Clustering matlab.ui.control.UIAxes
+NumberofCluster matlab.ui.control.NumericEditField
+NumberofClusterSliderLabel matlab.ui.control.Label
+NumberofClusterSlider matlab.ui.control.Slider
+ExtractCluster matlab.ui.control.NumericEditField
+ExtractClusterSliderLabel matlab.ui.control.Label
+ExtractClusterSlider matlab.ui.control.Slider
+PreviewPanel matlab.ui.container.Panel
+UIAxes_Preview_1 matlab.ui.control.UIAxes
+UIAxes_Preview_2 matlab.ui.control.UIAxes
+UIAxes_Preview_3 matlab.ui.control.UIAxes
+UIAxes_Preview_4 matlab.ui.control.UIAxes
+run_status matlab.ui.control.Label
+end
+properties (Access = private)
+IMG1; % Description
+IMG % Description
+IMG_Thresholding % Description
+IMG_Adjust
+IMG_Edge
+IMG_Cluster
+end
+methods (Access = private)
+function results = Gen_IMG_Adjust(app)
+IMa = imadjustn(app.IMG);
+app.IMG_Adjust = im2double(IMa);
+end
+function results = Gen_Thresholding(app)
+IMa = app.IMG_Adjust;
+value = app.Threshold.Value;
+app.IMG_Thresholding = im2double(imbinarize(IMa,value));
+if ~app.ApplyThresholdSwitch.Value
+imshow(IMa , 'Parent', app.UIAxes_Thresholding);
+else
+imshow(app.IMG_Thresholding , 'Parent', app.UIAxes_Thresholding);
+end
+app.UIAxes_Thresholding.Title.String = 'Appling Thresholding on Brain Scan';
+end
+function results = Gen_Edge(app)
+IMa = app.IMG_Adjust;
+IMa = rgb2gray(im2double(IMa));
+if ~app.ApplyEdgeSwitch.Value
+S1 = edge(IMa,'log');
+app.IMG_Edge = im2double(S1);
+app.UIAxes_Edge.Title.String = 'Appling Edge with Method "Log"';
+else
+S1 = edge(IMa,'canny');
+app.IMG_Edge = im2double(S1);
+app.UIAxes_Edge.Title.String = 'Appling Edge with Method "Canny"';
+end
+imshow(app.IMG_Edge , 'Parent', app.UIAxes_Edge);
+end
+function results = Gen_Clustering(app)
+change_extract_cluster_info(app , 0);
+IMx = rgb2gray(im2double(app.IMG_Adjust));
+IMx_data = IMx(:);
+IMx_data = double(IMx_data);
+idx = kmeans(IMx_data, app.NumberofCluster.Value );
+app.IMG_Cluster = reshape( idx ,size(IMx));
+if app.ExtractCluster.Value == 0
+Sa = (app.IMG_Cluster - 1)/(app.NumberofCluster.Value - 1)*255;
+% imshow(app.IMG_Cluster , [] , 'Parent', app.UIAxes_Clustering);
+imshow(Sa , [] , 'Parent', app.UIAxes_Clustering);
+else
+Sa = app.IMG_Cluster == app.ExtractCluster.Value;
+Sa = im2double(Sa);
+imshow(Sa, [] , 'Parent', app.UIAxes_Clustering);
+end
+app.UIAxes_Clustering.Title.String = 'Appling Clustering on Brain Scan';
+end
+function results = change_extract_cluster_info(app , start)
+app.ExtractCluster.Limits(2) = app.NumberofCluster.Value;
+app.ExtractClusterSlider.Limits(2) = app.NumberofCluster.Value;
+if start
+app.ExtractCluster.Value = 0;
+app.ExtractClusterSlider.Value = 0;
+end
+end
+function results = load_preview(app)
+imshow(app.IMG_Adjust , 'Parent' , app.UIAxes_Preview_1);
+imshow(app.IMG_Thresholding , 'Parent' , app.UIAxes_Preview_2);
+imshow(app.IMG_Edge , 'Parent' , app.UIAxes_Preview_3);
+imshow(app.IMG_Cluster , [] , 'Parent' , app.UIAxes_Preview_4);
+end
+function results = Change_Clustering(app)
+if app.ExtractCluster.Value == 0
+Sa = (app.IMG_Cluster - 1)/(app.NumberofCluster.Value - 1)*255;
+imshow(Sa , [] , 'Parent', app.UIAxes_Clustering);
+else
+Sa = app.IMG_Cluster == app.ExtractCluster.Value;
+Sa = im2double(Sa);
+imshow(Sa, [] , 'Parent', app.UIAxes_Clustering);
+end
+app.UIAxes_Clustering.Title.String = 'Appling Clustering on Brain Scan';
+end
+end
+% Callbacks that handle component events
+methods (Access = private)
+% Code that executes after component creation
+function startupFcn(app)
+% app.ApplyThresholdCheckBox.Value = 0;
+end
+% Callback function
+function RunClicked(app, event)
+% Run Started
+app.run_status.Text = 'RUNNING...';
+app.run_status.FontColor = 'y';
+change_extract_cluster_info(app , 1);
+Gen_IMG_Adjust(app); 
+Gen_Thresholding(app);
+Gen_Edge(app);
+Gen_Clustering(app);
+load_preview(app);
+% Run Completed
+app.run_status.Text = 'Complete';
+app.run_status.FontColor = 'g';
+end
+% Callback function
+function LoadClicked(app, event)
+%load image
+[file, path] = uigetfile('*.*', 'Select an Image');
+if ~ischar(file)
+% User canceled the operation
+errordlg('Error finding path', 'Error');
+return
+end
+% Construct the full file path
+fullFilePath = fullfile(path, file);
+% Load the image
+app.IMG = imread(fullFilePath);
+% Display the image in an Image Viewer component
+imshow(app.IMG , 'Parent',app.UIAxes_Original);
+% app.UIAxes_Original = gca;
+end
+% Value changed function: Threshold
+function ThresholdValueChanged(app, event)
+app.ThresholdSlider.Value = app.Threshold.Value;
+Gen_Thresholding(app);
+end
+% Value changing function: ThresholdSlider
+function ThresholdSliderValueChanging(app, event)
+app.Threshold.Value = event.Value; 
+end
+% Value changed function: ThresholdSlider
+function ThresholdSliderValueChanged(app, event)
+app.Threshold.Value = app.ThresholdSlider.Value;
+Gen_Thresholding(app);
+end
+% Callback function
+function ApplyThresholdCheckBoxValueChanged(app, event)
+Gen_Thresholding(app); 
+end
+% Value changed function: ApplyEdgeSwitch
+function ApplyEdgeSwitchValueChanged(app, event)
+Gen_Edge(app);
+end
+% Value changed function: NumberofCluster
+function NumberofClusterValueChanged(app, event)
+change_extract_cluster_info(app);
+app.NumberofClusterSlider.Value = app.NumberofCluster.Value;
+Gen_Clustering(app);
+end
+% Value changed function: ApplyThresholdSwitch
+function ApplyThresholdSwitchValueChanged(app, event)
+Gen_Thresholding(app);
+end
+% Menu selected function: RunMenu
+function RunMenuSelected(app, event)
+RunClicked(app);
+end
+% Menu selected function: OpenMenu
+function OpenMenuSelected(app, event)
+LoadClicked(app);
+end
+% Value changed function: ExtractCluster
+function ExtractClusterValueChanged(app, event)
+app.ExtractClusterSlider.Value = app.ExtractCluster.Value;
+Change_Clustering(app);
+end
+% Menu selected function: DevelopersMenu
+function DevelopersMenuSelected(app, event)
+% Load the html file
+web('about/developers.html');
+end
+% Menu selected function: AppMenu
+function AppMenuSelected(app, event)
+% Load the html file
+web('about/app.html');
+end
+% Value changed function: ExtractClusterSlider
+function ExtractClusterSliderValueChanged(app, event)
+app.ExtractClusterSlider.Value = round(app.ExtractClusterSlider.Value);
+app.ExtractCluster.Value = app.ExtractClusterSlider.Value;
+Change_Clustering(app); 
+end
+% Value changed function: NumberofClusterSlider
+function NumberofClusterSliderValueChanged(app, event)
+app.NumberofClusterSlider.Value = round(app.NumberofClusterSlider.Value);
+app.NumberofCluster.Value = app.NumberofClusterSlider.Value;
+Gen_Clustering(app); 
+end
+end
+% Component initialization
+methods (Access = private)
+% Create UIFigure and components
+function createComponents(app)
+% Create UIFigure and hide until all components are created
+app.UIFigure = uifigure('Visible', 'off');
+app.UIFigure.Position = [100 100 908 535];
+app.UIFigure.Name = 'MATLAB App';
+% Create FileMenu
+app.FileMenu = uimenu(app.UIFigure);
+app.FileMenu.Text = 'File';
+% Create OpenMenu
+app.OpenMenu = uimenu(app.FileMenu);
+app.OpenMenu.MenuSelectedFcn = createCallbackFcn(app, @OpenMenuSelected, true);
+app.OpenMenu.Text = 'Open';
+% Create RunMenu
+app.RunMenu = uimenu(app.FileMenu);
+app.RunMenu.MenuSelectedFcn = createCallbackFcn(app, @RunMenuSelected, true);
+app.RunMenu.Text = 'Run';
+% Create ToolsMenu
+app.ToolsMenu = uimenu(app.UIFigure);
+app.ToolsMenu.Text = 'Tools';
+% Create ExportMenu
+app.ExportMenu = uimenu(app.ToolsMenu);
+app.ExportMenu.Text = 'Export';
+% Create ReportMenu
+app.ReportMenu = uimenu(app.ExportMenu);
+app.ReportMenu.Text = 'Report';
+% Create ImageMenu
+app.ImageMenu = uimenu(app.ExportMenu);
+app.ImageMenu.Text = 'Image';
+% Create AboutMenu
+app.AboutMenu = uimenu(app.UIFigure);
+app.AboutMenu.Text = 'About';
+% Create AppMenu
+app.AppMenu = uimenu(app.AboutMenu);
+app.AppMenu.MenuSelectedFcn = createCallbackFcn(app, @AppMenuSelected, true);
+app.AppMenu.Text = 'App';
+% Create DevelopersMenu
+app.DevelopersMenu = uimenu(app.AboutMenu);
+app.DevelopersMenu.MenuSelectedFcn = createCallbackFcn(app, 
+@DevelopersMenuSelected, true);
+app.DevelopersMenu.Text = 'Developers';
+% Create TabGroup
+app.TabGroup = uitabgroup(app.UIFigure);
+app.TabGroup.Position = [214 24 695 510];
+% Create OriginalTab
+app.OriginalTab = uitab(app.TabGroup);
+app.OriginalTab.Title = 'Original';
+% Create UIAxes_Original
+app.UIAxes_Original = uiaxes(app.OriginalTab);
+title(app.UIAxes_Original, '')
+xlabel(app.UIAxes_Original, '')
+ylabel(app.UIAxes_Original, '')
+zlabel(app.UIAxes_Original, '')
+app.UIAxes_Original.XTick = [];
+app.UIAxes_Original.YTick = [];
+app.UIAxes_Original.Position = [15 4 667 438];
+% Create ThresholdingTab
+app.ThresholdingTab = uitab(app.TabGroup);
+app.ThresholdingTab.Title = 'Thresholding';
+% Create UIAxes_Thresholding
+app.UIAxes_Thresholding = uiaxes(app.ThresholdingTab);
+title(app.UIAxes_Thresholding, '')
+xlabel(app.UIAxes_Thresholding, '')
+ylabel(app.UIAxes_Thresholding, '')
+zlabel(app.UIAxes_Thresholding, '')
+app.UIAxes_Thresholding.XTick = [];
+app.UIAxes_Thresholding.YTick = [];
+app.UIAxes_Thresholding.Position = [15 4 667 438];
+% Create ThresholdSliderLabel
+app.ThresholdSliderLabel = uilabel(app.ThresholdingTab);
+app.ThresholdSliderLabel.HorizontalAlignment = 'right';
+app.ThresholdSliderLabel.FontWeight = 'bold';
+app.ThresholdSliderLabel.Position = [370 452 63 22];
+app.ThresholdSliderLabel.Text = 'Threshold';
+% Create ThresholdSlider
+app.ThresholdSlider = uislider(app.ThresholdingTab);
+app.ThresholdSlider.Limits = [0 1];
+app.ThresholdSlider.ValueChangedFcn = createCallbackFcn(app, 
+@ThresholdSliderValueChanged, true);
+app.ThresholdSlider.ValueChangingFcn = createCallbackFcn(app, 
+@ThresholdSliderValueChanging, true);
+app.ThresholdSlider.Position = [454 472 150 3];
+app.ThresholdSlider.Value = 0.68;
+% Create Threshold
+app.Threshold = uieditfield(app.ThresholdingTab, 'numeric');
+app.Threshold.Limits = [0 1];
+app.Threshold.ValueChangedFcn = createCallbackFcn(app, @ThresholdValueChanged, 
+true);
+app.Threshold.Position = [625 449 57 22];
+app.Threshold.Value = 0.68;
+% Create ApplyThresholdSwitch
+app.ApplyThresholdSwitch = uiswitch(app.ThresholdingTab, 'slider');
+app.ApplyThresholdSwitch.Items = {'Adjust', 'Apply Threshold'};
+app.ApplyThresholdSwitch.ItemsData = [0 1];
+app.ApplyThresholdSwitch.ValueChangedFcn = createCallbackFcn(app, 
+@ApplyThresholdSwitchValueChanged, true);
+app.ApplyThresholdSwitch.FontWeight = 'bold';
+app.ApplyThresholdSwitch.Position = [125 451 45 20];
+app.ApplyThresholdSwitch.Value = 0;
+% Create EdgeTab
+app.EdgeTab = uitab(app.TabGroup);
+app.EdgeTab.Title = 'Edge';
+% Create UIAxes_Edge
+app.UIAxes_Edge = uiaxes(app.EdgeTab);
+title(app.UIAxes_Edge, '')
+xlabel(app.UIAxes_Edge, '')
+ylabel(app.UIAxes_Edge, '')
+zlabel(app.UIAxes_Edge, '')
+app.UIAxes_Edge.XTick = [];
+app.UIAxes_Edge.YTick = [];
+app.UIAxes_Edge.Position = [15 4 667 438];
+% Create ApplyEdgeSwitch
+app.ApplyEdgeSwitch = uiswitch(app.EdgeTab, 'slider');
+app.ApplyEdgeSwitch.Items = {'Log Method', 'Canny'};
+app.ApplyEdgeSwitch.ItemsData = [0 1];
+app.ApplyEdgeSwitch.ValueChangedFcn = createCallbackFcn(app, 
+@ApplyEdgeSwitchValueChanged, true);
+app.ApplyEdgeSwitch.FontWeight = 'bold';
+app.ApplyEdgeSwitch.Position = [486 455 45 20];
+app.ApplyEdgeSwitch.Value = 0;
+% Create ClusteringTab
+app.ClusteringTab = uitab(app.TabGroup);
+app.ClusteringTab.Title = 'Clustering';
+% Create UIAxes_Clustering
+app.UIAxes_Clustering = uiaxes(app.ClusteringTab);
+title(app.UIAxes_Clustering, '')
+xlabel(app.UIAxes_Clustering, '')
+ylabel(app.UIAxes_Clustering, '')
+zlabel(app.UIAxes_Clustering, '')
+app.UIAxes_Clustering.XTick = [];
+app.UIAxes_Clustering.YTick = [];
+app.UIAxes_Clustering.Position = [15 4 667 438];
+% Create NumberofCluster
+app.NumberofCluster = uieditfield(app.ClusteringTab, 'numeric');
+app.NumberofCluster.Limits = [0 10];
+app.NumberofCluster.RoundFractionalValues = 'on';
+app.NumberofCluster.ValueDisplayFormat = '%.0f';
+app.NumberofCluster.ValueChangedFcn = createCallbackFcn(app, 
+@NumberofClusterValueChanged, true);
+app.NumberofCluster.Position = [293 457 36 22];
+app.NumberofCluster.Value = 3;
+% Create NumberofClusterSliderLabel
+app.NumberofClusterSliderLabel = uilabel(app.ClusteringTab);
+app.NumberofClusterSliderLabel.HorizontalAlignment = 'right';
+app.NumberofClusterSliderLabel.FontWeight = 'bold';
+app.NumberofClusterSliderLabel.Position = [11 450 110 22];
+app.NumberofClusterSliderLabel.Text = 'Number of Cluster';
+% Create NumberofClusterSlider
+app.NumberofClusterSlider = uislider(app.ClusteringTab);
+app.NumberofClusterSlider.Limits = [0 10];
+app.NumberofClusterSlider.ValueChangedFcn = createCallbackFcn(app, 
+@NumberofClusterSliderValueChanged, true);
+app.NumberofClusterSlider.Position = [128 471 150 3];
+app.NumberofClusterSlider.Value = 3;
+% Create ExtractCluster
+app.ExtractCluster = uieditfield(app.ClusteringTab, 'numeric');
+app.ExtractCluster.Limits = [0 10];
+app.ExtractCluster.RoundFractionalValues = 'on';
+app.ExtractCluster.ValueDisplayFormat = '%.0f';
+app.ExtractCluster.ValueChangedFcn = createCallbackFcn(app, 
+@ExtractClusterValueChanged, true);
+app.ExtractCluster.Position = [650 457 32 22];
+% Create ExtractClusterSliderLabel
+app.ExtractClusterSliderLabel = uilabel(app.ClusteringTab);
+app.ExtractClusterSliderLabel.HorizontalAlignment = 'right';
+app.ExtractClusterSliderLabel.FontWeight = 'bold';
+app.ExtractClusterSliderLabel.Position = [375 452 90 22];
+app.ExtractClusterSliderLabel.Text = 'Extract Cluster';
+% Create ExtractClusterSlider
+app.ExtractClusterSlider = uislider(app.ClusteringTab);
+app.ExtractClusterSlider.Limits = [0 10];
+app.ExtractClusterSlider.ValueChangedFcn = createCallbackFcn(app, 
+@ExtractClusterSliderValueChanged, true);
+app.ExtractClusterSlider.Position = [486 472 150 3];
+% Create PreviewPanel
+app.PreviewPanel = uipanel(app.UIFigure);
+app.PreviewPanel.Title = 'Preview';
+app.PreviewPanel.Position = [1 1 211 532];
+% Create UIAxes_Preview_1
+app.UIAxes_Preview_1 = uiaxes(app.PreviewPanel);
+title(app.UIAxes_Preview_1, '')
+xlabel(app.UIAxes_Preview_1, '')
+ylabel(app.UIAxes_Preview_1, '')
+zlabel(app.UIAxes_Preview_1, '')
+app.UIAxes_Preview_1.XTick = [];
+app.UIAxes_Preview_1.YTick = [];
+app.UIAxes_Preview_1.Position = [7 387 198 117];
+% Create UIAxes_Preview_2
+app.UIAxes_Preview_2 = uiaxes(app.PreviewPanel);
+title(app.UIAxes_Preview_2, '')
+xlabel(app.UIAxes_Preview_2, '')
+ylabel(app.UIAxes_Preview_2, '')
+zlabel(app.UIAxes_Preview_2, '')
+ app.UIAxes_Preview_2.XTick = [];
+ app.UIAxes_Preview_2.YTick = [];
+ app.UIAxes_Preview_2.Position = [7 262 198 117];
+ % Create UIAxes_Preview_3
+ app.UIAxes_Preview_3 = uiaxes(app.PreviewPanel);
+ title(app.UIAxes_Preview_3, '')
+ xlabel(app.UIAxes_Preview_3, '')
+ ylabel(app.UIAxes_Preview_3, '')
+ zlabel(app.UIAxes_Preview_3, '')
+ app.UIAxes_Preview_3.XTick = [];
+ app.UIAxes_Preview_3.YTick = [];
+ app.UIAxes_Preview_3.Position = [7 137 198 117];
+ % Create UIAxes_Preview_4
+ app.UIAxes_Preview_4 = uiaxes(app.PreviewPanel);
+ title(app.UIAxes_Preview_4, '')
+ xlabel(app.UIAxes_Preview_4, '')
+ ylabel(app.UIAxes_Preview_4, '')
+ zlabel(app.UIAxes_Preview_4, '')
+ app.UIAxes_Preview_4.XTick = [];
+ app.UIAxes_Preview_4.YTick = [];
+ app.UIAxes_Preview_4.Position = [7 13 198 117];
+ % Create run_status
+ app.run_status = uilabel(app.UIFigure);
+ app.run_status.BackgroundColor = [0.651 0.651 0.651];
+ app.run_status.HorizontalAlignment = 'center';
+ app.run_status.FontSize = 16;
+ app.run_status.FontWeight = 'bold';
+ app.run_status.Position = [252 1 325 22];
+ app.run_status.Text = 'Status';
+ % Show the figure after all components are created
+ app.UIFigure.Visible = 'on';
+ end
+ end
+ % App creation and deletion
+ methods (Access = public)
+ % Construct app
+ function app = EEE_4602_Project
+ % Create UIFigure and components
+ createComponents(app)
+ % Register the app with App Designer
+ registerApp(app, app.UIFigure)
+ % Execute the startup function
+ runStartupFcn(app, @startupFcn)
+ if nargout == 0
+ clear app
+ end
+ end
+ % Code that executes before app deletion
+ function delete(app)
+ % Delete UIFigure when app is deleted
+ delete(app.UIFigure)
+ end
+ end
+end
